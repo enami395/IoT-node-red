@@ -1,0 +1,194 @@
+[
+    {
+        "id": "8d08f7fd6b6d8ee8",
+        "type": "tab",
+        "label": "Interface Detection Objet IA",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "f4517abf5bf52c72",
+        "type": "cocossd",
+        "z": "8d08f7fd6b6d8ee8",
+        "name": "",
+        "x": 480,
+        "y": 500,
+        "wires": [
+            [
+                "9e7b2fc8119fcc8c",
+                "16914aada2411bef"
+            ]
+        ]
+    },
+    {
+        "id": "f7e8a69749398af0",
+        "type": "image",
+        "z": "8d08f7fd6b6d8ee8",
+        "name": "",
+        "width": 160,
+        "data": "payload",
+        "dataType": "msg",
+        "thumbnail": true,
+        "active": true,
+        "pass": false,
+        "outputs": 0,
+        "x": 500,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "9e7b2fc8119fcc8c",
+        "type": "debug",
+        "z": "8d08f7fd6b6d8ee8",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 740,
+        "y": 500,
+        "wires": []
+    },
+    {
+        "id": "16914aada2411bef",
+        "type": "function",
+        "z": "8d08f7fd6b6d8ee8",
+        "name": "function 1",
+        "func": "let result = \"\";\n\n// 1. Si l'IA renvoie directement un mot (ex: \"dog\")\nif (typeof msg.payload === \"string\") {\n    result = \"Détecté : \" + msg.payload;\n} \n// 2. Si l'IA renvoie un tableau d'éléments\nelse if (Array.isArray(msg.payload) && msg.payload.length > 0) {\n    let objets = [];\n    for (let i = 0; i < msg.payload.length; i++) {\n        let item = msg.payload[i];\n        \n        // Si c'est un objet détaillé avec un score\n        if (item.class !== undefined) {\n            let nom = item.class;\n            let precision = item.score ? Math.round(item.score * 100) + \"%\" : \"\";\n            objets.push(nom + (precision ? \" (\" + precision + \")\" : \"\"));\n        } \n        // Si c'est juste un mot dans un tableau\n        else if (typeof item === \"string\") {\n            objets.push(item);\n        }\n    }\n    result = \"Détecté : \" + objets.join(\", \");\n} \n// 3. S'il n'y a rien\nelse {\n    result = \"Aucun objet détecté\";\n}\n\nmsg.payload = result;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 580,
+        "y": 580,
+        "wires": [
+            [
+                "0df11028bf433227"
+            ]
+        ]
+    },
+    {
+        "id": "0df11028bf433227",
+        "type": "ui_text",
+        "z": "8d08f7fd6b6d8ee8",
+        "group": "39b66eaebd5bd9ab",
+        "order": 0,
+        "width": 0,
+        "height": 0,
+        "name": "",
+        "label": "Analyse IA",
+        "format": "{{msg.payload}}",
+        "layout": "row-spread",
+        "className": "",
+        "style": false,
+        "font": "",
+        "fontSize": 16,
+        "color": "#000000",
+        "x": 750,
+        "y": 580,
+        "wires": []
+    },
+    {
+        "id": "30360b11135f641e",
+        "type": "ui_template",
+        "z": "8d08f7fd6b6d8ee8",
+        "group": "39b66eaebd5bd9ab",
+        "name": "",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "format": "<div style=\"padding: 10px; background-color: #f9f9f9; border-radius: 8px;\">\n    <label style=\"display: block; margin-bottom: 8px; font-weight: bold; color: #333;\">Choisir une image à analyser :</label>\n    <input type=\"file\" id=\"monImageInput\" accept=\"image/png, image/jpeg, image/jpg\" style=\"padding: 5px; border: 1px solid #ccc; background: white; width: 100%; box-sizing: border-box;\" />\n</div>\n\n<script>\n    (function(scope) {\n    setTimeout(function() {\n        var inputElement = document.getElementById('monImageInput');\n        if (inputElement) {\n            inputElement.addEventListener('change', function(e) {\n                var file = e.target.files[0];\n                if (!file) return;\n\n                var reader = new FileReader();\n                reader.onload = function(event) {\n                    // 1. On charge l'image en mémoire\n                    var img = new Image();\n                    img.onload = function() {\n                        \n                        // 2. On définit une taille raisonnable pour l'IA\n                        var MAX_WIDTH = 800;\n                        var MAX_HEIGHT = 800;\n                        var width = img.width;\n                        var height = img.height;\n\n                        if (width > height) {\n                            if (width > MAX_WIDTH) {\n                                height *= MAX_WIDTH / width;\n                                width = MAX_WIDTH;\n                            }\n                        } else {\n                            if (height > MAX_HEIGHT) {\n                                width *= MAX_HEIGHT / height;\n                                height = MAX_HEIGHT;\n                            }\n                        }\n\n                        // 3. On dessine l'image rétrécie sur une toile (canvas) invisible\n                        var canvas = document.createElement('canvas');\n                        canvas.width = width;\n                        canvas.height = height;\n                        var ctx = canvas.getContext('2d');\n                        ctx.drawImage(img, 0, 0, width, height);\n\n                        // 4. On la compresse en JPEG léger (0.8 = 80% de qualité)\n                        var dataUrl = canvas.toDataURL('image/jpeg', 0.8);\n                        \n                        // 5. On envoie enfin la version légère à Node-RED\n                        var base64Data = dataUrl.split(',')[1];\n                        scope.send({ payload: base64Data });\n                    };\n                    img.src = event.target.result;\n                };\n                reader.readAsDataURL(file);\n            });\n        }\n    }, 200);\n})(scope);\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 80,
+        "y": 500,
+        "wires": [
+            [
+                "01fc77f776950cfb",
+                "f7e8a69749398af0",
+                "128d20a784cf1a6a"
+            ]
+        ]
+    },
+    {
+        "id": "128d20a784cf1a6a",
+        "type": "function",
+        "z": "8d08f7fd6b6d8ee8",
+        "name": "Traduction Base64",
+        "func": "// On transforme le texte (base64) en vrai fichier binaire (Buffer)\nmsg.payload = Buffer.from(msg.payload, 'base64');\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 290,
+        "y": 480,
+        "wires": [
+            [
+                "f4517abf5bf52c72"
+            ]
+        ]
+    },
+    {
+        "id": "01fc77f776950cfb",
+        "type": "ui_template",
+        "z": "8d08f7fd6b6d8ee8",
+        "group": "39b66eaebd5bd9ab",
+        "name": "Affichage Image",
+        "order": 2,
+        "width": 0,
+        "height": 0,
+        "format": "<div style=\"text-align: center; padding: 10px;\" ng-if=\"msg.payload\">\n    <span style=\"font-weight: bold; color: #666;\">Aperçu de l'image :</span><br>\n    <img ng-src=\"data:image/jpeg;base64,{{msg.payload}}\"\n         style=\"max-width: 100%; max-height: 400px; margin-top: 10px; border-radius: 8px; box-shadow: 0px 4px 10px rgba(0,0,0,0.3);\"/>\n</div>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 340,
+        "y": 580,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "39b66eaebd5bd9ab",
+        "type": "ui_group",
+        "name": "Résultats",
+        "tab": "4d632ff5187e956c",
+        "order": 1,
+        "disp": true,
+        "width": 6,
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "4d632ff5187e956c",
+        "type": "ui_tab",
+        "name": "Détection d'objets",
+        "icon": "dashboard",
+        "order": 2,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "190f0d1d452a2124",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-tensorflow": "0.4.2",
+            "node-red-contrib-image-output": "0.6.4",
+            "node-red-dashboard": "3.6.6"
+        }
+    }
+]

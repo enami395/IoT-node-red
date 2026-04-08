@@ -1,0 +1,528 @@
+[
+    {
+        "id": "1d3c56bb37c36130",
+        "type": "tab",
+        "label": "Mini_Projet_AVANT",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "fe1bc8a89f6f5db2",
+        "type": "inject",
+        "z": "1d3c56bb37c36130",
+        "name": "Tick (1s)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "1",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "1",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 520,
+        "y": 280,
+        "wires": [
+            [
+                "f568c43955044cd3"
+            ]
+        ]
+    },
+    {
+        "id": "f568c43955044cd3",
+        "type": "function",
+        "z": "1d3c56bb37c36130",
+        "name": "Simulation GPU / Temp / Fan",
+        "func": "context.temp = context.temp || 45;\ncontext.fan = context.fan || 1200;\ncontext.gpu = context.gpu || 60;\n\nlet variation = Math.random() * 10 - 5;\nlet gpu = context.gpu + variation;\ngpu = Math.max(30, Math.min(95, gpu));\n\n// ✅ Température limitée entre 40 et 90°C\nlet temp = context.temp + (gpu - 50) * 0.03;\ntemp = Math.max(40, Math.min(90, temp));\n\nlet fan = context.fan;\nif (temp > 75) { fan += 200; } else if (temp < 65) { fan -= 150; }\nfan = Math.max(800, Math.min(4000, fan));\n\ncontext.temp = temp;\ncontext.fan = fan;\ncontext.gpu = gpu;\n\nmsg.payload = {\n    gpu: Math.round(gpu),\n    temperature: Math.round(temp),\n    fan: Math.round(fan),\n    time: new Date().toLocaleTimeString()\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 840,
+        "y": 280,
+        "wires": [
+            [
+                "388a2dda30c44b46"
+            ]
+        ]
+    },
+    {
+        "id": "388a2dda30c44b46",
+        "type": "function",
+        "z": "1d3c56bb37c36130",
+        "name": "Préparer MQTT",
+        "func": "msg.topic = 'datacenter/metrics';\nmsg.payload = JSON.stringify(msg.payload);\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1100,
+        "y": 280,
+        "wires": [
+            [
+                "0a84a935a0c09de7"
+            ]
+        ]
+    },
+    {
+        "id": "0a84a935a0c09de7",
+        "type": "mqtt out",
+        "z": "1d3c56bb37c36130",
+        "name": "Publier métriques",
+        "topic": "datacenter/metrics",
+        "qos": "0",
+        "retain": false,
+        "respTopic": "",
+        "contentType": "",
+        "userProps": "",
+        "correl": "",
+        "expiry": "",
+        "broker": "4a64fa3d3b26b056",
+        "x": 1450,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "bbe61f5f7c38b523",
+        "type": "mqtt in",
+        "z": "1d3c56bb37c36130",
+        "name": "Recevoir métriques",
+        "topic": "datacenter/metrics",
+        "qos": "0",
+        "datatype": "auto",
+        "broker": "4a64fa3d3b26b056",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 760,
+        "y": 760,
+        "wires": [
+            [
+                "5b900b9f1bba1b8f"
+            ]
+        ]
+    },
+    {
+        "id": "5b900b9f1bba1b8f",
+        "type": "function",
+        "z": "1d3c56bb37c36130",
+        "name": "Parser JSON",
+        "func": "if (typeof msg.payload === 'string') {\n    msg.payload = JSON.parse(msg.payload);\n}\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1010,
+        "y": 760,
+        "wires": [
+            [
+                "f572d439e3a5f131",
+                "54b9961694bf3221"
+            ]
+        ]
+    },
+    {
+        "id": "54b9961694bf3221",
+        "type": "function",
+        "z": "1d3c56bb37c36130",
+        "name": "TensorFlow - Prédiction surchauffe",
+        "func": "// Historique des températures\ncontext.history = context.history || [];\ncontext.history.push(msg.payload.temperature);\nif (context.history.length > 10) context.history.shift();\n\n// Besoin d'au moins 3 points\nif (context.history.length < 3) {\n    msg.payload = { prediction: 'En attente de données...', risk: 'unknown' };\n    return msg;\n}\n\n// Régression linéaire simple sur l'historique\nconst n = context.history.length;\nlet sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;\nfor (let i = 0; i < n; i++) {\n    sumX += i;\n    sumY += context.history[i];\n    sumXY += i * context.history[i];\n    sumX2 += i * i;\n}\nconst slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);\nconst intercept = (sumY - slope * sumX) / n;\n\n// Prédiction dans 5 secondes\nconst predicted = Math.round(slope * (n + 5) + intercept);\n\nlet risk, color;\nif (predicted >= 80) {\n    risk = '🔴 CRITIQUE — Surchauffe imminente!';\n    color = '#ef4444';\n} else if (predicted >= 70) {\n    risk = '🟠 ATTENTION — Température en hausse';\n    color = '#f59e0b';\n} else {\n    risk = '🟢 NORMAL — Température stable';\n    color = '#10b981';\n}\n\nmsg.payload = {\n    predicted: predicted,\n    risk: risk,\n    color: color,\n    history: context.history\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1240,
+        "y": 940,
+        "wires": [
+            [
+                "845605aadf2ce971",
+                "0fc8411c902cb956"
+            ]
+        ]
+    },
+    {
+        "id": "0fc8411c902cb956",
+        "type": "debug",
+        "z": "1d3c56bb37c36130",
+        "name": "TF Prédiction",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1570,
+        "y": 840,
+        "wires": []
+    },
+    {
+        "id": "845605aadf2ce971",
+        "type": "ui_template",
+        "z": "1d3c56bb37c36130",
+        "group": "384d2ec42cdb3b19",
+        "name": "Affichage Prédiction",
+        "order": 1,
+        "width": 6,
+        "height": 3,
+        "format": "<div style=\"padding:15px; text-align:center;\">\n  <div style=\"font-size:13px; color:#666; margin-bottom:6px; text-transform:uppercase; letter-spacing:1px;\">Prédiction TensorFlow (dans 5s)</div>\n  <div style=\"font-size:36px; font-weight:bold; color:{{msg.payload.color}};\">\n    {{msg.payload.predicted}} °C\n  </div>\n  <div style=\"margin-top:10px; padding:10px; border-radius:8px; background:{{msg.payload.color}}22; color:{{msg.payload.color}}; font-weight:bold;\">\n    {{msg.payload.risk}}\n  </div>\n</div>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 1580,
+        "y": 940,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "f572d439e3a5f131",
+        "type": "function",
+        "z": "1d3c56bb37c36130",
+        "name": "Split metrics",
+        "func": "let data = msg.payload;\n\nlet msg1 = { payload: data.gpu,         topic: \"GPU\",  label: \"GPU Load\" };\nlet msg2 = { payload: data.temperature, topic: \"Temp\", label: \"Temperature\" };\nlet msg3 = { payload: data.fan,         topic: \"Fan\",  label: \"Fan Speed\" };\n\nreturn [msg1, msg2, msg3];\n",
+        "outputs": 3,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1260,
+        "y": 520,
+        "wires": [
+            [
+                "decbd501a1a3d386",
+                "f9d41c9a53c9b156"
+            ],
+            [
+                "c688cb287fee5058",
+                "d639984b73a16a0a",
+                "ca14308aadad30e4"
+            ],
+            [
+                "3cfa5ef666e0fa57",
+                "713e94d76c3008a9"
+            ]
+        ]
+    },
+    {
+        "id": "decbd501a1a3d386",
+        "type": "ui_gauge",
+        "z": "1d3c56bb37c36130",
+        "name": "GPU Load",
+        "group": "grp1",
+        "order": 1,
+        "width": 6,
+        "height": 4,
+        "gtype": "gage",
+        "title": "GPU (%)",
+        "label": "",
+        "format": "{{value}}",
+        "min": 0,
+        "max": 100,
+        "colors": [
+            "#10b981",
+            "#f59e0b",
+            "#ef4444"
+        ],
+        "seg1": "",
+        "seg2": "",
+        "diff": false,
+        "className": "",
+        "x": 1470,
+        "y": 380,
+        "wires": []
+    },
+    {
+        "id": "c688cb287fee5058",
+        "type": "ui_gauge",
+        "z": "1d3c56bb37c36130",
+        "name": "Temperature",
+        "group": "grp1",
+        "order": 2,
+        "width": 6,
+        "height": 4,
+        "gtype": "gage",
+        "title": "Temp (°C)",
+        "label": "",
+        "format": "{{value}}",
+        "min": 20,
+        "max": 100,
+        "colors": [
+            "#00b33e",
+            "#e6e600",
+            "#ca3838"
+        ],
+        "seg1": "60",
+        "seg2": "75",
+        "diff": false,
+        "className": "",
+        "x": 1710,
+        "y": 480,
+        "wires": []
+    },
+    {
+        "id": "3cfa5ef666e0fa57",
+        "type": "ui_gauge",
+        "z": "1d3c56bb37c36130",
+        "name": "Fan Speed",
+        "group": "grp1",
+        "order": 3,
+        "width": 6,
+        "height": 4,
+        "gtype": "gage",
+        "title": "Fan (RPM)",
+        "label": "",
+        "format": "{{value}}",
+        "min": 0,
+        "max": "4000",
+        "colors": [
+            "#00b500",
+            "#e6e600",
+            "#ca3838"
+        ],
+        "seg1": "2000",
+        "seg2": "3000",
+        "diff": false,
+        "className": "",
+        "x": 1490,
+        "y": 560,
+        "wires": []
+    },
+    {
+        "id": "f9d41c9a53c9b156",
+        "type": "ui_chart",
+        "z": "1d3c56bb37c36130",
+        "name": "GPU Chart",
+        "group": "grp2",
+        "order": 1,
+        "width": 6,
+        "height": 4,
+        "label": "GPU Load",
+        "chartType": "line",
+        "xformat": "HH:mm:ss",
+        "interpolate": "bezier",
+        "removeOlder": "100",
+        "removeOlderUnit": "1",
+        "outputs": 1,
+        "x": 1490,
+        "y": 460,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "d639984b73a16a0a",
+        "type": "ui_chart",
+        "z": "1d3c56bb37c36130",
+        "name": "Temp Chart",
+        "group": "grp2",
+        "order": 2,
+        "width": 6,
+        "height": 4,
+        "label": "Temperature",
+        "chartType": "line",
+        "xformat": "HH:mm:ss",
+        "interpolate": "bezier",
+        "nodata": "",
+        "dot": false,
+        "ymin": "",
+        "ymax": "",
+        "removeOlder": "100",
+        "removeOlderPoints": "",
+        "removeOlderUnit": "1",
+        "cutout": "",
+        "useOneColor": false,
+        "useUTC": false,
+        "colors": [
+            "#1f77b4",
+            "#aec7e8",
+            "#ff7f0e",
+            "#2ca02c",
+            "#98df8a",
+            "#d62728",
+            "#ff9896",
+            "#9467bd",
+            "#c5b0d5"
+        ],
+        "outputs": 1,
+        "useDifferentColor": false,
+        "className": "",
+        "x": 1710,
+        "y": 520,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "713e94d76c3008a9",
+        "type": "ui_chart",
+        "z": "1d3c56bb37c36130",
+        "name": "Fan Chart",
+        "group": "grp2",
+        "order": 3,
+        "width": 6,
+        "height": 4,
+        "label": "Fan Speed",
+        "chartType": "line",
+        "xformat": "HH:mm:ss",
+        "interpolate": "bezier",
+        "removeOlder": "100",
+        "removeOlderUnit": "1",
+        "outputs": 1,
+        "x": 1480,
+        "y": 600,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "ca14308aadad30e4",
+        "type": "switch",
+        "z": "1d3c56bb37c36130",
+        "name": "Temp Alert",
+        "property": "payload",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "gt",
+                "v": "70",
+                "vt": "num"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 1,
+        "x": 1490,
+        "y": 680,
+        "wires": [
+            [
+                "55d8ea345d6ca184",
+                "555d1a591ff96f6a"
+            ]
+        ]
+    },
+    {
+        "id": "55d8ea345d6ca184",
+        "type": "debug",
+        "z": "1d3c56bb37c36130",
+        "name": "ALERT HIGH TEMP",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1710,
+        "y": 700,
+        "wires": []
+    },
+    {
+        "id": "555d1a591ff96f6a",
+        "type": "ui_toast",
+        "z": "1d3c56bb37c36130",
+        "position": "top right",
+        "displayTime": "3",
+        "highlight": "",
+        "sendall": true,
+        "outputs": 0,
+        "ok": "OK",
+        "cancel": "",
+        "raw": false,
+        "className": "",
+        "topic": "",
+        "name": "TEMP ALERTE",
+        "x": 1700,
+        "y": 760,
+        "wires": []
+    },
+    {
+        "id": "4a64fa3d3b26b056",
+        "type": "mqtt-broker",
+        "name": "Mosquitto Local",
+        "broker": "localhost",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "384d2ec42cdb3b19",
+        "type": "ui_group",
+        "name": "Prédiction TensorFlow",
+        "tab": "tab1",
+        "order": 3,
+        "disp": true,
+        "width": 6,
+        "collapse": false
+    },
+    {
+        "id": "grp1",
+        "type": "ui_group",
+        "name": "Live Metrics",
+        "tab": "tab1",
+        "order": 1,
+        "width": 6
+    },
+    {
+        "id": "grp2",
+        "type": "ui_group",
+        "name": "Charts",
+        "tab": "tab1",
+        "order": 2,
+        "width": 6
+    },
+    {
+        "id": "tab1",
+        "type": "ui_tab",
+        "name": "Data Center Monitor",
+        "icon": "dashboard"
+    },
+    {
+        "id": "4de20f2d828e96a5",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-dashboard": "3.6.6"
+        }
+    }
+]

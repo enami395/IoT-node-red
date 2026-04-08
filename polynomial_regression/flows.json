@@ -1,0 +1,145 @@
+[
+    {
+        "id": "f4fd51de0bd78a1e",
+        "type": "tab",
+        "label": "Regression Polynomiale",
+        "disabled": false,
+        "info": "",
+        "env": []
+    },
+    {
+        "id": "d607040266c86a08",
+        "type": "function",
+        "z": "f4fd51de0bd78a1e",
+        "name": "Format Predict",
+        "func": "msg.payload = {\n    x_predict: [parseFloat(msg.payload)]\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 330,
+        "y": 200,
+        "wires": [
+            [
+                "d3b4a33e437be0c2"
+            ]
+        ]
+    },
+    {
+        "id": "d3b4a33e437be0c2",
+        "type": "function",
+        "z": "f4fd51de0bd78a1e",
+        "name": "Polynomial Regression ( Predict )",
+        "func": "const regression = global.get('pr_instance');\n\nif (!regression) {\n    msg.payload = { error: \"Modèle non trouvé\" };\n    return msg;\n}\n\nconst x = msg.payload.x_predict[0];\nconst y = regression.predict(x);\n\n// On renvoie un objet propre pour l'interface\nmsg.payload = {\n    x: x,\n    y_formatted: Math.round(y * 100) / 100 + \" k€\",\n    equation: regression.toString(2),\n    chart_data: y\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 590,
+        "y": 200,
+        "wires": [
+            [
+                "3df6a9adcbee0784",
+                "754d0d3c4796e725"
+            ]
+        ]
+    },
+    {
+        "id": "754d0d3c4796e725",
+        "type": "ui_text",
+        "z": "f4fd51de0bd78a1e",
+        "group": "ml_group",
+        "order": 2,
+        "width": "",
+        "height": "",
+        "name": "Afficher Prix",
+        "label": "Prix Estimé :",
+        "format": "{{msg.payload.y_formatted}}",
+        "layout": "row-spread",
+        "className": "",
+        "style": false,
+        "font": "",
+        "fontSize": "",
+        "color": "#000000",
+        "x": 850,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "3df6a9adcbee0784",
+        "type": "ui_text",
+        "z": "f4fd51de0bd78a1e",
+        "group": "ml_group",
+        "order": 0,
+        "width": "",
+        "height": "",
+        "name": "Equation UI",
+        "label": "Modèle :",
+        "format": "{{msg.payload.equation}}",
+        "layout": "col-center",
+        "className": "",
+        "style": false,
+        "font": "",
+        "fontSize": "",
+        "color": "#000000",
+        "x": 850,
+        "y": 140,
+        "wires": []
+    },
+    {
+        "id": "36ba91b013d7c17f",
+        "type": "ui_numeric",
+        "z": "f4fd51de0bd78a1e",
+        "name": "Saisie Superficie",
+        "label": "Superficie (m²)",
+        "tooltip": "",
+        "group": "ml_group",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "wrap": false,
+        "passthru": true,
+        "topic": "topic",
+        "topicType": "str",
+        "format": "{{value}}",
+        "min": 10,
+        "max": 500,
+        "step": 1,
+        "className": "",
+        "x": 130,
+        "y": 200,
+        "wires": [
+            [
+                "d607040266c86a08"
+            ]
+        ]
+    },
+    {
+        "id": "ml_group",
+        "type": "ui_group",
+        "name": "Contrôle ML",
+        "tab": "ml_tab_ui",
+        "order": 1,
+        "disp": true,
+        "width": "6"
+    },
+    {
+        "id": "ml_tab_ui",
+        "type": "ui_tab",
+        "name": "Régression Polynomiale",
+        "icon": "trending_up",
+        "order": 1
+    },
+    {
+        "id": "fe891647135bc023",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-dashboard": "3.6.6"
+        }
+    }
+]
